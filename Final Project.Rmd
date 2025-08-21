@@ -307,10 +307,35 @@ invisible(ggsave("figs/fig5_hexbin_crp_ferritin.png",
 ```
 
 # Introduction
+
 This report analyzes gene expression profiles from the dataset with clinical covariates. I focus on AAK1 for the main figures and summarize key continuous (age, CRP, ferritin) and categorical variables (sex, ICU status, disease status). Data were cleaned (string trimming, standardization of categories), merged with the gene matrix, and visualized.
 
 # Methods
-I create a LaTeX-formatted descriptive table of three continuous (age, CRP, ferritin) and three categorical variables (sex, ICU status, disease status), stratified by ICU status. For the main plots, I produced: (i) a histogram of AAK1 expression, (ii) a scatterplot of AAK1 vs ferritin colored by ICU status, and (iii) a boxplot of AAK1 by sex with ICU status as fill. For the heatmap, I select the top 10 genes by variance (ensuring AAK1 is included), applied row-wise z‑score normalization, clustered rows and columns, and added two tracking bars (sex, ICU status). Moreover, I included a new plot type (hexbin) to depict dense 2D distributions.
+
+I analyzed a patient dataset containing both clinical variables and gene expression data. 
+The clinical variables included three continuous measures (age, CRP, and ferritin) and three categorical variables (sex, ICU status, and disease status). 
+For descriptive analysis, I created a LaTeX-formatted summary table stratified by ICU status. 
+
+All analyses were performed in \textbf{R version 4.3.1}. 
+I used the following R packages: 
+\texttt{tidyverse} for data manipulation and visualization, 
+\texttt{janitor} for data cleaning, 
+\texttt{gtsummary} and \texttt{kableExtra} for generating formatted summary tables, 
+\texttt{scales} for axis scaling, 
+\texttt{ComplexHeatmap} and \texttt{circlize} for heatmap generation, 
+\texttt{glue} and \texttt{patchwork} for combining plots, 
+and \texttt{hexbin} for hexagonal binning of dense scatterplots. 
+
+For the main plots, I produced:  
+(i) a histogram of AAK1 expression to examine its distribution;  
+(ii) a scatterplot of AAK1 expression versus ferritin, colored by ICU status;  
+(iii) a boxplot of AAK1 expression by sex with ICU status as the grouping variable.  
+For the heatmap, I first selected the top 10 most variable genes (by variance), while ensuring that \texttt{AAK1} was included. 
+Then I constructed a gene-by-sample matrix and performed row-wise z-score normalization of gene expression. 
+I also applied hierarchical clustering to both rows (genes) and columns (samples), using Euclidean distance as the distance metric and complete linkage as the clustering method and added two annotation bars to the heatmap to indicate patient sex and ICU status. 
+To reduce visual complexity, I restricted the heatmap to the first 20 patients as an illustrative example.  
+
+Finally, I introduced an additional plot type, the \texttt{hexbin} plot, to explore the joint distribution of CRP and ferritin values. This method bins data into hexagonal cells and encodes cell counts with color intensity, allowing dense two-dimensional relationships to be visualized while minimizing overplotting.
 
 # Results
 
