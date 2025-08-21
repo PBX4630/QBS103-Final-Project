@@ -1,0 +1,376 @@
+---
+title: "Final Project"
+author: "PBX"
+date: "2025-08-19"
+output: pdf_document
+header-includes:
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage{array}
+  - \usepackage{float}
+  
+---
+Step0:Environment
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  dpi = 300
+)
+packages <- c(
+  "tidyverse","janitor","gtsummary","kableExtra","scales",
+  "ComplexHeatmap","circlize","glue","patchwork","hexbin"
+)
+to_install <- setdiff(packages, rownames(installed.packages()))
+if(length(to_install)) install.packages(to_install, dependencies = TRUE)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("ComplexHeatmap")
+
+#loading
+library(tidyverse)
+library(janitor)
+library(gtsummary)
+library(kableExtra)
+library(scales)
+library(ComplexHeatmap)
+library(circlize)
+library(glue)
+library(patchwork)
+library(hexbin)
+
+#generalizing format
+theme_set(theme_minimal(base_size = 12))
+update_geom_defaults("point", list(alpha = 0.8))
+set.seed(123)
+
+dir.create("figs", showWarnings = FALSE)
+dir.create("tables", showWarnings = FALSE)
+```
+
+
+Step1:Read and Adjust data
+```{r}
+meta_raw  <- readr::read_csv("QBS103_GSE157103_series_matrix-1.csv", show_col_types = FALSE)
+genes_raw <- readr::read_csv("QBS103_GSE157103_genes (1).csv", show_col_types = FALSE)
+
+#cleaning names in dataset
+meta <- meta_raw %>% clean_names()
+glimpse(meta, width = 80)
+
+meta <- meta %>%
+  mutate(across(where(is.character), ~str_trim(.x))) %>%
+  mutate(across(where(is.character),
+                ~ifelse(str_to_lower(.x) %in% c("unknown","na",""),
+                        NA_character_, .x)))
+
+#creating 3 continuous variables + categorical variables
+clean_num <- function(x) {
+  x %>%
+    str_trim() %>%
+    na_if("") %>% na_if("NA") %>% na_if("na") %>% na_if("unknown") %>% na_if(":") %>%
+    readr::parse_number(locale = readr::locale(decimal_mark = ".", grouping_mark = ","))
+}
+
+meta <- meta %>%
+  mutate(
+    age      = clean_num(age),
+    ferritin = clean_num(ferritin_ng_ml),
+    crp      = clean_num(crp_mg_l)
+  )
+
+meta <- meta %>%
+  mutate(
+    sex = case_when(
+      str_to_lower(sex) == "female" ~ "Female",
+      str_to_lower(sex) == "male"   ~ "Male",
+      TRUE                          ~ "Unknown"
+    ),
+    icu_status = case_when(
+      str_to_lower(icu_status) %in% c("yes","icu")                   ~ "ICU",
+      str_to_lower(icu_status) %in% c("no","nonicu","non-icu")       ~ "Non-ICU",
+      TRUE                                                           ~ "Unknown"
+    ),
+    disease_status = case_when(
+      !is.na(disease_status) & str_detect(str_to_lower(disease_status), "covid") ~ "COVID-19",
+      TRUE                                                                       ~ "Non-COVID"
+    )
+  ) %>%
+  mutate(
+    sex            = factor(sex,            levels = c("Female","Male","Unknown")),
+    icu_status     = factor(icu_status,     levels = c("ICU","Non-ICU","Unknown")),
+    disease_status = factor(disease_status, levels = c("COVID-19","Non-COVID"))
+  )
+
+#transpose matrix and combining dataset
+genes_t <- genes_raw %>%
+  rename(gene = 1) %>%
+  column_to_rownames("gene") %>%
+  t() %>% as.data.frame() %>%
+  rownames_to_column("participant_id") %>%
+  as_tibble()
+
+full_data <- meta %>% left_join(genes_t, by = "participant_id")
+
+#checking
+dim(full_data)
+```
+
+Step3: Generating Latex summary table (stratified by icu_status)
+```{r step3_tbl, echo=TRUE, message=FALSE, warning=FALSE, results='hide'}
+# Step3: Generate LaTeX summary table (stratified by icu_status)
+
+#selecting variables
+table_dat <- full_data %>%
+  dplyr::select(icu_status, sex, disease_status, age, crp, ferritin)
+
+tab1 <- gtsummary::tbl_summary(
+  data = table_dat,
+  by = icu_status,
+  statistic = list(
+    gtsummary::all_continuous()  ~ "{mean} ({sd})",
+    gtsummary::all_categorical() ~ "{n} ({p}%)"
+  ),
+  digits  = gtsummary::all_continuous() ~ 1,
+  missing = "ifany",
+  label = list(
+    age            ~ "Age (years)",
+    crp            ~ "CRP (mg/L)",
+    ferritin       ~ "Ferritin (ng/mL)",
+    sex            ~ "Sex",
+    disease_status ~ "Disease status"
+  )
+) %>%
+  gtsummary::add_overall(last = TRUE) %>%
+  gtsummary::bold_labels() %>%
+  gtsummary::modify_caption("**Summary statistics stratified by ICU status**")
+
+#export Latex
+library(kableExtra)
+dir.create("tables", showWarnings = FALSE)
+
+invisible(tab1)
+
+latex_tab1 <- gtsummary::as_kable_extra(
+  x = tab1, format = "latex", booktabs = TRUE, escape = FALSE
+) %>%
+  kable_styling(latex_options = "HOLD_position")
+
+invisible(save_kable(latex_tab1, "tables/summary_table.tex"))
+```
+
+
+Step4: Making previous graph
+```{r}
+#select main gene
+gene_main <- "AAK1"
+
+#histogram
+p_hist <- ggplot(full_data, aes(x = .data[[gene_main]])) +
+  geom_histogram(binwidth = 0.5, color = "white") +
+  labs(
+    title = glue("Histogram of {gene_main} Expression"),
+    x = glue("{gene_main} Expression (a.u.)"),
+    y = "Count"
+  ) +
+  theme(plot.title = element_text(hjust = 0.04))
+
+ggsave("figs/fig1_histogram_AAK1.png", p_hist, width = 6, height = 4, dpi = 300)
+
+#scatter plot
+p_scatter <- ggplot(full_data, aes(x = ferritin, y = .data[[gene_main]], color = icu_status)) +
+  geom_point() +
+  labs(
+    title = glue("{gene_main} vs Ferritin"),
+    x = "Ferritin (ng/mL)",
+    y = glue("{gene_main} Expression"),
+    color = "ICU"
+  ) +
+  scale_x_continuous(labels = scales::label_comma()) +
+  scale_color_brewer(palette = "Set1") +
+  theme(plot.title = element_text(hjust = 0.04))
+
+ggsave("figs/fig2_scatter_AAK1_ferritin.png", p_scatter, width = 6, height = 4, dpi = 300)
+
+#boxplot
+p_box <- ggplot(full_data, aes(x = sex, y = .data[[gene_main]], fill = icu_status)) +
+  geom_boxplot() +
+  labs(
+    title = glue("{gene_main} Expression by Sex and ICU Status"),
+    x = "Sex",
+    y = glue("{gene_main} Expression"),
+    fill = "ICU"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme(plot.title = element_text(hjust = 0.04))
+
+ggsave("figs/fig3_box_AAK1_sex_icu.png", p_box, width = 6, height = 4, dpi = 300)
+```
+
+
+Step5:Heatmap
+```{r step5_heatmap_subset20, include=FALSE, message=FALSE, warning=FALSE}
+
+# gene set
+gene_names_all <- genes_raw[[1]]
+gene_cols <- intersect(gene_names_all, colnames(full_data))
+
+# rank by variance
+gene_var <- sapply(gene_cols, function(g) var(full_data[[g]], na.rm = TRUE))
+ranked_genes <- names(sort(gene_var, decreasing = TRUE))
+
+# top10 + force AAK1
+top10 <- head(ranked_genes, 10)
+if (!("AAK1" %in% top10) && ("AAK1" %in% gene_cols)) {
+  top10 <- unique(c("AAK1", head(ranked_genes, 9)))
+}
+
+# first 20 patients
+ids20 <- head(unique(full_data$participant_id), 20)
+sub_data <- full_data %>% filter(participant_id %in% ids20)
+
+# build matrix (genes x patients)
+mat <- sub_data %>%
+  select(participant_id, all_of(top10)) %>%
+  tibble::column_to_rownames("participant_id") %>%
+  as.matrix() %>%
+  t()
+
+# remove all-NA samples
+all_na <- apply(mat, 2, function(v) all(is.na(v)))
+mat <- mat[, !all_na, drop = FALSE]
+
+# z-score (row-wise)
+mat_scaled <- t(scale(t(mat)))
+
+# annotation for sex & icu_status (only these 20 patients)
+ann_df <- sub_data %>%
+  select(participant_id, sex, icu_status) %>%
+  distinct() %>%
+  tibble::column_to_rownames("participant_id")
+ann_df <- ann_df[colnames(mat_scaled), , drop = FALSE]
+
+ha <- HeatmapAnnotation(
+  df = ann_df,
+  col = list(
+    sex = c("Female"="#8DA0CB","Male"="#FC8D62","Unknown"="#BDBDBD"),
+    icu_status = c("ICU"="#E41A1C","Non-ICU"="#377EB8","Unknown"="#BDBDBD")
+  ),
+  annotation_height = unit(c(4,4), "mm"),
+  simple_anno_size = unit(3,"mm")
+)
+
+col_fun <- colorRamp2(c(-2,0,2), c("#313695","#FFFFFF","#A50026"))
+
+ht <- Heatmap(
+  mat_scaled,
+  name = "z-score",
+  top_annotation = ha,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  show_row_names = TRUE,
+  show_column_names = FALSE,
+  row_title = "Genes",
+  column_title = "Samples",
+  col = col_fun,
+  heatmap_legend_param = list(title="z-score")
+)
+
+# save
+dir.create("figs", showWarnings = FALSE)
+pdf("figs/fig4_heatmap_top10_genes_subset20.pdf", width=7.5, height=7.5)
+draw(ht)
+dev.off()
+
+png("figs/fig4_heatmap_top10_genes_subset20.png", width=2200, height=2200, res=300)
+draw(ht)
+dev.off()
+```
+
+Step6: hexbin plot
+```{r step6_hexbin_save, include=FALSE}
+library(ggplot2)
+
+p_hex <- ggplot(full_data, aes(x = crp, y = ferritin)) +
+  geom_hex(bins = 30) +
+  scale_fill_viridis_c() +
+  labs(x = "CRP (mg/L)", y = "Ferritin (ng/mL)", fill = "Counts") +
+  theme_minimal()
+
+invisible(ggsave("figs/fig5_hexbin_crp_ferritin.png", p_hex,
+                 width = 6, height = 5, dpi = 300))
+
+invisible(ggsave("figs/fig5_hexbin_crp_ferritin.png",
+                 p_hex, width = 6, height = 5, dpi = 300))
+```
+
+# Introduction
+This report analyzes gene expression profiles from the dataset with clinical covariates. I focus on AAK1 for the main figures and summarize key continuous (age, CRP, ferritin) and categorical variables (sex, ICU status, disease status). Data were cleaned (string trimming, standardization of categories), merged with the gene matrix, and visualized.
+
+# Methods
+I create a LaTeX-formatted descriptive table of three continuous (age, CRP, ferritin) and three categorical variables (sex, ICU status, disease status), stratified by ICU status. For the main plots, I produced: (i) a histogram of AAK1 expression, (ii) a scatterplot of AAK1 vs ferritin colored by ICU status, and (iii) a boxplot of AAK1 by sex with ICU status as fill. For the heatmap, I select the top 10 genes by variance (ensuring AAK1 is included), applied row-wise z‑score normalization, clustered rows and columns, and added two tracking bars (sex, ICU status). Moreover, I included a new plot type (hexbin) to depict dense 2D distributions.
+
+# Results
+
+## Summary Table
+
+\input{tables/summary_table.tex}
+
+## Figures
+
+Figure 1. Histogram of AAK1 expression.  
+\includegraphics[width=0.8\textwidth]{figs/fig1_histogram_AAK1.png}  
+
+The histogram shows that AAK1 expression is right-skewed, with most samples between 3–7 units.
+
+---
+
+Figure 2. Scatterplot of AAK1 expression vs ferritin, colored by ICU status.  
+\includegraphics[width=0.8\textwidth]{figs/fig2_scatter_AAK1_ferritin.png}  
+
+The scatterplot indicates no clear linear relationship between ferritin and AAK1 expression.
+
+---
+
+Figure 3. Boxplot of AAK1 expression by sex and ICU status.  
+\includegraphics[width=0.8\textwidth]{figs/fig3_box_AAK1_sex_icu.png}  
+
+The boxplot shows that ICU patients tend to have slightly higher AAK1 expression compared to non-ICU patients.
+
+---
+
+Figure 4. Heatmap of the top 10 most variable genes.  
+\includegraphics[width=0.9\textwidth]{figs/fig4_heatmap_top10_genes_subset20.pdf}  
+
+The heatmap based on the first 20 patients shows distinct clustering patterns, suggesting that ICU status and sex are associated with gene expression variation.
+
+---
+
+Figure 5. Hexbin plot of CRP vs Ferritin.  
+\includegraphics[width=0.8\textwidth]{figs/fig5_hexbin_crp_ferritin.png}  
+The plot shows that most patients cluster in the low CRP and low ferritin range, with a few extreme outliers.
+
+# References
+
+	Wickham H et al. (2019). tidyverse: Easily Install and Load the ‘Tidyverse’. R package version 1.3.1.
+Available at: https://CRAN.R-project.org/package=tidyverse
+	•	Firke S. (2023). janitor: Simple Tools for Examining and Cleaning Dirty Data. R package version 2.2.0.
+Available at: https://CRAN.R-project.org/package=janitor
+	•	Sjoberg DD, Whiting K, Curry M, Lavery JA, Larmarange J. (2021). gtsummary: Presentation-Ready Data Summaries and Analytic Result Tables.
+Available at: https://CRAN.R-project.org/package=gtsummary
+	•	Zhu H. (2021). kableExtra: Construct Complex Table with ‘kable’ and Pipe Syntax.
+Available at: https://CRAN.R-project.org/package=kableExtra
+	•	Wickham H. (2022). scales: Scale Functions for Visualization.
+Available at: https://CRAN.R-project.org/package=scales
+	•	Gu Z, Eils R, Schlesner M. (2016). ComplexHeatmap: Making Complex Heatmaps Simple. Bioinformatics 32(18):2847-2849.
+Available at: https://bioconductor.org/packages/ComplexHeatmap
+	•	Gu Z, Gu L. (2014). circlize: Circular Visualization in R. Bioinformatics 30(19):2811-2812.
+Available at: https://CRAN.R-project.org/package=circlize
+	•	Hester J, Wickham H, Chang W, Bryan J. (2023). glue: Interpreted String Literals.
+Available at: https://CRAN.R-project.org/package=glue
+	•	Pedersen TL. (2020). patchwork: The Composer of Plots.
+Available at: https://CRAN.R-project.org/package=patchwork
+	•	Carr DB, Lewin-Koh NJ, Maechler M. (2022). hexbin: Hexagonal Binning Routines.
+Available at: https://CRAN.R-project.org/package=hexbin
