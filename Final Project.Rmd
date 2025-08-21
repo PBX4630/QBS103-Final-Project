@@ -323,34 +323,36 @@ I create a LaTeX-formatted descriptive table of three continuous (age, CRP, ferr
 Figure 1. Histogram of AAK1 expression.  
 \includegraphics[width=0.8\textwidth]{figs/fig1_histogram_AAK1.png}  
 
-The histogram shows that AAK1 expression is right-skewed, with most samples between 3–7 units.
+AAK1 expression is right-skewed, with most samples concentrated between 3–7 units, suggesting variability across patients.
 
 ---
 
 Figure 2. Scatterplot of AAK1 expression vs ferritin, colored by ICU status.  
 \includegraphics[width=0.8\textwidth]{figs/fig2_scatter_AAK1_ferritin.png}  
 
-The scatterplot indicates no clear linear relationship between ferritin and AAK1 expression.
+The scatterplot shows no clear linear relationship between ferritin and AAK1 expression, although most patients cluster at low ferritin values.
 
 ---
 
 Figure 3. Boxplot of AAK1 expression by sex and ICU status.  
 \includegraphics[width=0.8\textwidth]{figs/fig3_box_AAK1_sex_icu.png}  
 
-The boxplot shows that ICU patients tend to have slightly higher AAK1 expression compared to non-ICU patients.
+The boxplot suggests that ICU patients may have slightly higher AAK1 expression than non-ICU patients, with no major differences across sex groups.
 
 ---
 
 Figure 4. Heatmap of the top 10 most variable genes.  
 \includegraphics[width=0.9\textwidth]{figs/fig4_heatmap_top10_genes_subset20.pdf}  
 
-The heatmap based on the first 20 patients shows distinct clustering patterns, suggesting that ICU status and sex are associated with gene expression variation.
+The heatmap of the first 20 patients shows distinct clustering patterns, indicating that both ICU status and sex are associated with gene expression variation.
 
 ---
 
 Figure 5. Hexbin plot of CRP vs Ferritin.  
-\includegraphics[width=0.8\textwidth]{figs/fig5_hexbin_crp_ferritin.png}  
-The plot shows that most patients cluster in the low CRP and low ferritin range, with a few extreme outliers.
+\includegraphics[width=0.8\textwidth]{figs/fig5_hexbin_crp_ferritin.png}
+
+The hexbin plot shows most patients clustered in the low CRP and low ferritin range, while a few outliers display very high ferritin levels.
+
 
 # References
 
