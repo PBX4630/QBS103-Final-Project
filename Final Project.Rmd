@@ -312,11 +312,11 @@ This report analyzes gene expression profiles from the dataset with clinical cov
 
 # Methods
 
-I analyzed a patient dataset containing both clinical variables and gene expression data. 
+I analyzed a patient data set containing both clinical variables and gene expression data. 
 The clinical variables included three continuous measures (age, CRP, and ferritin) and three categorical variables (sex, ICU status, and disease status). 
-For descriptive analysis, I created a LaTeX-formatted summary table stratified by ICU status. 
+For descriptive analysis, I created a LaTeX formatted summary table stratified by ICU status. 
 
-All analyses were performed in \textbf{R version 4.3.1}. 
+All analyses were processed in \textbf{R version 4.3.1}. 
 I used the following R packages: 
 \texttt{tidyverse} for data manipulation and visualization, 
 \texttt{janitor} for data cleaning, 
@@ -332,10 +332,10 @@ For the main plots, I produced:
 (iii) a boxplot of AAK1 expression by sex with ICU status as the grouping variable.  
 For the heatmap, I first selected the top 10 most variable genes (by variance), while ensuring that \texttt{AAK1} was included. 
 Then I constructed a gene-by-sample matrix and performed row-wise z-score normalization of gene expression. 
-I also applied hierarchical clustering to both rows (genes) and columns (samples), using Euclidean distance as the distance metric and complete linkage as the clustering method and added two annotation bars to the heatmap to indicate patient sex and ICU status. 
-To reduce visual complexity, I restricted the heatmap to the first 20 patients as an illustrative example.  
+I also applied hierarchical clustering to both rows and columns, using Euclidean distance as the distance metric and complete linkage as the clustering method.
+In order to reduce visual complexity, I restrict the heatmap to the first 20 patients as an illustrative example.
 
-Finally, I introduced an additional plot type, the \texttt{hexbin} plot, to explore the joint distribution of CRP and ferritin values. This method bins data into hexagonal cells and encodes cell counts with color intensity, allowing dense two-dimensional relationships to be visualized while minimizing overplotting.
+For the final step, I introduced an additional plot type, the \texttt{hexbin} plot, to explore the joint distribution of CRP and ferritin values. This method bins data into hexagonal cells and encodes cell counts with color intensity, allowing dense two dimensional relationships to be visualized.
 
 # Results
 
